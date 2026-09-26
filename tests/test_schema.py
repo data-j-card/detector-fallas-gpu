@@ -34,3 +34,8 @@ def test_api_acepta_ventana_valida_y_rechaza_fuera_de_rango_o_incompleta(df):
         Ventana(lecturas=[{**lecturas[0], "temp_c": 150.0}] + lecturas[1:])
     with pytest.raises(ValidationError):
         Ventana(lecturas=lecturas[:29])
+
+
+def test_segundo_duplicado_descarta_ambas_copias(df):
+    dup = df.filter((pl.col("episodio_id") == 5) & (pl.col("segundo") == 42))
+    assert validar(pl.concat([df, dup])).height == validar(df).height - 1

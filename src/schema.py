@@ -38,8 +38,11 @@ class Telemetria(Senales):
     segundo: int = pa.Field(ge=0)
     estado: str = pa.Field(isin=ESTADOS)
 
+    @pa.dataframe_check
+    def par_unico(cls, data: pa.PolarsData) -> pl.LazyFrame:
+        return data.lazyframe.select(~pl.struct("episodio_id", "segundo").is_duplicated())
+
     class Config:
-        unique = ["episodio_id", "segundo"]
         drop_invalid_rows = True
 
 
