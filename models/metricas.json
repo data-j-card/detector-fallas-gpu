@@ -1,5 +1,5 @@
 {
-  "modelo": "features -> StandardScaler -> LogisticRegression",
+  "modelo": "contrato -> features -> StandardScaler -> LogisticRegression",
   "tamano_ventana_s": 30,
   "clases": [
     "degradacion_memoria",
