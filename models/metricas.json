@@ -1,0 +1,80 @@
+{
+  "modelo": "features -> StandardScaler -> LogisticRegression",
+  "tamano_ventana_s": 30,
+  "ventanas": 480,
+  "episodios": 48,
+  "clases": [
+    "degradacion_memoria",
+    "falla_alimentacion",
+    "normal",
+    "sobrecalentamiento"
+  ],
+  "features": [
+    "temp_c_mean",
+    "temp_c_std",
+    "temp_c_min",
+    "temp_c_max",
+    "temp_c_pendiente",
+    "temp_c_dif_abs",
+    "power_w_mean",
+    "power_w_std",
+    "power_w_min",
+    "power_w_max",
+    "power_w_pendiente",
+    "power_w_dif_abs",
+    "util_pct_mean",
+    "util_pct_std",
+    "util_pct_min",
+    "util_pct_max",
+    "util_pct_pendiente",
+    "util_pct_dif_abs",
+    "clock_mhz_mean",
+    "clock_mhz_std",
+    "clock_mhz_min",
+    "clock_mhz_max",
+    "clock_mhz_pendiente",
+    "clock_mhz_dif_abs",
+    "power_w_cv",
+    "clock_mhz_cv",
+    "ecc_total",
+    "ecc_frac_con_error",
+    "ecc_max",
+    "ecc_pendiente",
+    "temp_frac_sobre_umbral",
+    "util_frac_alta",
+    "temp_por_watt",
+    "watt_por_util",
+    "clock_por_util",
+    "corr_temp_clock",
+    "corr_power_clock",
+    "corr_util_power",
+    "corr_power_temp"
+  ],
+  "validacion": "StratifiedGroupKFold 4 folds x 10 repeticiones, grupos = episodio_id",
+  "metricas": {
+    "accuracy_ventana": {
+      "media": 1.0,
+      "p2_5": 1.0,
+      "p97_5": 1.0
+    },
+    "f1_macro_ventana": {
+      "media": 1.0,
+      "p2_5": 1.0,
+      "p97_5": 1.0
+    },
+    "log_loss_ventana": {
+      "media": 0.0031,
+      "p2_5": 0.0028,
+      "p97_5": 0.0035
+    },
+    "accuracy_episodio": {
+      "media": 1.0,
+      "p2_5": 1.0,
+      "p97_5": 1.0
+    }
+  },
+  "versiones": {
+    "scikit-learn": "1.9.1",
+    "polars": "1.44.2"
+  }
+}
