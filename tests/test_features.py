@@ -6,7 +6,7 @@ from features import construir_dataset, features
 
 def test_ventanas_sin_ids_ni_nulos(df):
     X, y, grupos = construir_dataset(df)
-    assert X.height == 477  # 3 ventanas con potencia negativa: episodios 36, 38 y 44
+    assert X.height == 480 and grupos.value_counts()["count"].unique().to_list() == [10]
     assert not {"episodio_id", "segundo", "estado"} & set(X.columns)
     assert X.null_count().sum_horizontal().item() == 0 and not X.select(pl.all().is_nan().any()).row(0)[0]
 
@@ -24,3 +24,9 @@ def test_fila_corrupta_descarta_solo_su_ventana(df, romper):
 def test_segundo_duplicado_descarta_su_ventana(df):
     dup = df.filter((pl.col("episodio_id") == 5) & (pl.col("segundo") == 42))
     assert construir_dataset(pl.concat([df, dup]))[0].height == construir_dataset(df)[0].height - 1
+
+
+def test_negativo_tolerable_se_recorta_a_cero(df):
+    X, _, grupos = construir_dataset(df)
+    fila = grupos.to_list().index(36) + 107 // 30  # episodio 36, segundo 107: -13.5 W
+    assert X["power_w_min"][fila] == 0.0

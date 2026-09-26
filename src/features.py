@@ -58,6 +58,7 @@ EXPRESIONES = [
 
 def features(df: pl.DataFrame, por: list[str] | None = None) -> pl.DataFrame:
     """Una fila de features por grupo `por`; sin `por`, el df entero es una ventana (API)."""
+    df = df.with_columns(pl.col("power_w").clip(lower_bound=0))
     return df.group_by(por, maintain_order=True).agg(EXPRESIONES) if por else df.select(EXPRESIONES)
 
 
@@ -77,5 +78,6 @@ def construir_dataset(df: pl.DataFrame, tamano: int = TAMANO_VENTANA):
     f = features(v, claves)
 
     esperadas = df.select(pl.struct("episodio_id", pl.col("segundo") // tamano).n_unique()).item()
-    log.info("filas descartadas: %d | ventanas descartadas: %d", df.height - valido.height, esperadas - f.height)
+    log.info("filas descartadas: %d | ventanas descartadas: %d | lecturas de potencia recortadas a 0: %d",
+             df.height - valido.height, esperadas - f.height, v.filter(pl.col("power_w") < 0).height)
     return f.drop(claves), f["estado"], f["episodio_id"]

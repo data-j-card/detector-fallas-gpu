@@ -9,6 +9,7 @@ import polars as pl
 
 ESTADOS = ["normal", "sobrecalentamiento", "degradacion_memoria", "falla_alimentacion"]
 TAMANO_VENTANA = 30
+TOLERANCIA_W = 50.0  # negativos hasta -50 W son ruido del sensor en un colapso; se recortan a 0
 
 TIPOS = {"episodio_id": pl.Int64, "segundo": pl.Int64, "temp_c": pl.Float64, "power_w": pl.Float64,
          "util_pct": pl.Float64, "clock_mhz": pl.Float64, "ecc_errors": pl.Int64, "estado": pl.String}
@@ -16,7 +17,7 @@ TIPOS = {"episodio_id": pl.Int64, "segundo": pl.Int64, "temp_c": pl.Float64, "po
 
 class Senales(pa.DataFrameModel):
     temp_c: float = pa.Field(in_range={"min_value": 0, "max_value": 120})
-    power_w: float = pa.Field(gt=0)
+    power_w: float = pa.Field(ge=-TOLERANCIA_W)
     util_pct: float = pa.Field(in_range={"min_value": 0, "max_value": 100})
     clock_mhz: float = pa.Field(gt=0)
     ecc_errors: int = pa.Field(ge=0)

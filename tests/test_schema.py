@@ -11,9 +11,8 @@ def validar(df):
     return Telemetria.validate(df, lazy=True)
 
 
-def test_datos_reales_solo_fallan_en_potencia_negativa(df):
-    descartadas = df.join(validar(df), on=["episodio_id", "segundo"], how="anti")
-    assert descartadas.height == 3 and (descartadas["power_w"] < 0).all()
+def test_datos_reales_cumplen_el_contrato(df):
+    assert validar(df).height == df.height
 
 
 @pytest.mark.parametrize("valores", CORRUPTAS)
