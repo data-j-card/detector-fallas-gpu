@@ -4,16 +4,14 @@ El modelo se carga una vez al arrancar. `/predecir` no calcula features por su
 cuenta: el pipeline serializado aplica el mismo contrato y el mismo `features`
 del entrenamiento.
 
-Uso: uvicorn api:app
+Uso: uvicorn api:app --app-dir src
 """
 
-import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
 
 import joblib
-from fastapi import Body, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -22,7 +20,6 @@ from schema import Ventana
 
 RAIZ = Path(__file__).resolve().parents[1]
 MODELO = RAIZ / "models" / "modelo.joblib"
-EJEMPLOS = {r.stem: {"value": json.loads(r.read_text())} for r in sorted((RAIZ / "ejemplos").glob("*.json"))}
 
 
 class Prediccion(BaseModel):
@@ -58,7 +55,7 @@ def health() -> Salud:
 
 
 @app.post("/predecir")
-def predecir(ventana: Annotated[Ventana, Body(openapi_examples=EJEMPLOS)]) -> Prediccion:
+def predecir(ventana: Ventana) -> Prediccion:
     """Diagnostica una ventana de 30 lecturas consecutivas, de un segundo cada una."""
     # una ventana que viola el contrato no llega aqui: Ventana la rechaza con 422
     p = app.state.modelo.predict_proba(ventana.df)[0]

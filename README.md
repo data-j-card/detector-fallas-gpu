@@ -19,7 +19,6 @@ detector-fallas-gpu/
 ├── models/
 │   └── modelo.joblib    # el modelo serializado
 ├── data/                # telemetría de entrenamiento
-├── ejemplos/            # ventanas para probar /predecir
 ├── tests/
 ├── Dockerfile
 ├── .dockerignore
@@ -36,8 +35,8 @@ docker run -p 8000:8000 detector-gpu
 
 La API queda en <http://localhost:8000/docs>.
 
-La imagen parte de `python:3.12-slim`, instala `requirements.txt`, copia `src/`, el modelo y
-los ejemplos, expone el puerto 8000 y arranca `uvicorn`. `.dockerignore` deja fuera el entorno
+La imagen parte de `python:3.12-slim`, instala `requirements.txt`, copia `src/` y el modelo,
+expone el puerto 8000 y arranca `uvicorn`. `.dockerignore` deja fuera el entorno
 virtual, git, los datos y los tests.
 
 ## Endpoints
@@ -61,9 +60,8 @@ y devuelve el estado y la probabilidad que el modelo le da:
 {"estado_predicho": "sobrecalentamiento", "confianza": 0.998}
 ```
 
-```bash
-curl -X POST http://localhost:8000/predecir -H "Content-Type: application/json" -d @ejemplos/2_sobrecalentamiento.json
-```
+Para probarlo desde <http://localhost:8000/docs>: abrir `POST /predecir`, *Try it out*, pegar la
+ventana en el cuerpo y *Execute*.
 
 Si la ventana no tiene 30 lecturas, si a una lectura le falta un campo o trae un tipo
 incorrecto, o si un valor es físicamente imposible (por ejemplo, 150 °C), la API responde 422
@@ -99,5 +97,5 @@ python -m venv .venv
 pip install -r requirements.txt
 python -m pytest                  # tests
 python src/train.py               # reentrena y reescribe models/
-uvicorn api:app --port 8000       # la API sin Docker
+uvicorn api:app --app-dir src     # la API sin Docker
 ```
