@@ -55,6 +55,19 @@ def validar(df: pl.DataFrame, modelo=Telemetria) -> pl.DataFrame:
     return modelo.validate(df, lazy=True)
 
 
+def validar_ventana(df: pl.DataFrame) -> pl.DataFrame:
+    """Contrato para predecir: exactamente TAMANO_VENTANA lecturas y ninguna invalida.
+
+    Primer paso del pipeline serializado; aqui no se descarta nada, se rechaza la ventana.
+    """
+    if df.height != TAMANO_VENTANA:
+        raise ValueError(f"la ventana tiene {df.height} lecturas; se esperan {TAMANO_VENTANA}")
+    valido = validar(df, Senales)
+    if valido.height < df.height:
+        raise ValueError(f"{df.height - valido.height} lecturas fuera del rango fisico")
+    return valido
+
+
 def leer_csv(ruta) -> pl.DataFrame:
     return pl.read_csv(ruta, schema_overrides=TIPOS)
 
@@ -74,11 +87,8 @@ class Ventana(BaseModel):
     _df: pl.DataFrame = PrivateAttr()
 
     @model_validator(mode="after")
-    def _rango_fisico(self):
-        df = pl.DataFrame([l.model_dump() for l in self.lecturas])
-        self._df = validar(df, Senales)
-        if self._df.height < df.height:
-            raise ValueError("hay lecturas fuera del rango fisico")
+    def _contrato(self):
+        self._df = validar_ventana(pl.DataFrame([l.model_dump() for l in self.lecturas]))
         return self
 
     @property

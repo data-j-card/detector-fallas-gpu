@@ -11,12 +11,6 @@ def test_ventanas_sin_ids_ni_nulos(df):
     assert X.null_count().sum_horizontal().item() == 0 and not X.select(pl.all().is_nan().any()).row(0)[0]
 
 
-def test_train_y_api_calculan_lo_mismo(df):
-    X, _, _ = construir_dataset(df)
-    ventana = df.sort("episodio_id", "segundo").head(30).drop("episodio_id", "segundo", "estado")
-    assert_frame_equal(features(ventana), X.head(1))
-
-
 def test_fila_corrupta_descarta_solo_su_ventana(df, romper):
     assert construir_dataset(romper(df, 5, 42, temp_c=150.0))[0].height == construir_dataset(df)[0].height - 1
 

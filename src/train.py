@@ -3,8 +3,8 @@
 48 episodios -> 36 de entrenamiento y validacion (9 por clase)
              -> 12 de test (3 por clase), que solo se usan una vez, al final.
 
-El artefacto va de la ventana cruda (30 lecturas ya validadas) a la clase:
-features -> StandardScaler -> LogisticRegression, ajustado sobre los 36.
+El artefacto va de la ventana cruda (30 lecturas) a la clase:
+contrato -> features -> StandardScaler -> LogisticRegression, ajustado sobre los 36.
 
 Uso: python src/train.py
 """
@@ -25,7 +25,7 @@ from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
 from features import construir_dataset, features
-from schema import TAMANO_VENTANA, leer_csv
+from schema import TAMANO_VENTANA, leer_csv, validar_ventana
 
 RAIZ = Path(__file__).resolve().parents[1]
 DATOS = RAIZ / "data" / "telemetria_publica.csv"
@@ -103,11 +103,13 @@ def entrenar(datos: Path = DATOS, salida: Path = MODELOS) -> dict:
     ajustado = clasificador().fit(X[tr], y[tr])
     test = evaluar_test(ajustado, X[te], y[te], grupos[te])  # y de test solo se usa para puntuar
 
-    modelo = Pipeline([("features", FunctionTransformer(features)), *ajustado.steps])
+    modelo = Pipeline([("contrato", FunctionTransformer(validar_ventana)),
+                       ("features", FunctionTransformer(features)),
+                       *ajustado.steps])
     salida.mkdir(exist_ok=True)
     joblib.dump(modelo, salida / "modelo.joblib")
     reporte = _redondear({
-        "modelo": "features -> StandardScaler -> LogisticRegression",
+        "modelo": "contrato -> features -> StandardScaler -> LogisticRegression",
         "tamano_ventana_s": TAMANO_VENTANA,
         "clases": list(ajustado.classes_),
         "features": X.columns,

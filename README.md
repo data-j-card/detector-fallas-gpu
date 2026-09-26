@@ -38,7 +38,7 @@ pip install -r requirements.txt
 ## Uso
 
 ```bash
-python -m pytest              # 24 tests
+python -m pytest              # 26 tests
 python src/train.py           # reentrena y reescribe models/
 ```
 
@@ -94,8 +94,10 @@ entre caídas reales de potencia: son el sensor pasándose de cero en un colapso
 Recortarlas a 0 conserva el síntoma. Descartar la ventana o imputar la mediana lo borraba
 (la mediana bajaba la desviación estándar de la potencia hasta 17 %).
 
-En la API, `Ventana` exige exactamente 30 lecturas y rechaza la ventana entera si una sola
-lectura viola el contrato.
+Para predecir no se descarta nada: `validar_ventana` exige exactamente 30 lecturas y rechaza
+la ventana entera si una sola viola el contrato. Es el primer paso del pipeline serializado,
+así que `modelo.predict` rechaza datos imposibles aunque no pasen por `Ventana`, el modelo
+de entrada de la API, que usa la misma función.
 
 ## Features
 
