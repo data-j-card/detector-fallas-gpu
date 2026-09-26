@@ -38,7 +38,7 @@ pip install -r requirements.txt
 ## Uso
 
 ```bash
-python -m pytest              # 21 tests
+python -m pytest              # 24 tests
 python src/train.py           # reentrena y reescribe models/
 ```
 

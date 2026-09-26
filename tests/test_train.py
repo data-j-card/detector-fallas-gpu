@@ -5,7 +5,8 @@ import polars as pl
 import pytest
 
 from schema import Ventana
-from train import entrenar
+from features import construir_dataset
+from train import entrenar, separar_test
 
 
 @pytest.fixture(scope="module")
@@ -42,3 +43,11 @@ def test_test_reporta_ic95_por_episodio(salida):
     t = json.loads((salida / "metricas.json").read_text(encoding="utf-8"))["test"]
     bajo, alto = t["ic95_accuracy_episodio"]
     assert bajo <= t["accuracy_episodio"] <= alto and t["episodios_acertados"].endswith("/12")
+
+
+def test_split_no_parte_episodios(df):
+    _, y, grupos = construir_dataset(df)
+    g = grupos.to_numpy()
+    tr, te = separar_test(y.to_numpy(), g)
+    assert not set(g[tr]) & set(g[te])
+    assert all((g[te] == e).sum() == 10 for e in set(g[te]))  # cada episodio de test entra con sus 10 ventanas
