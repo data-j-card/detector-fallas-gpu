@@ -8,4 +8,3 @@ scipy==1.17.1
 fastapi==0.141.1
 uvicorn==0.54.0
 httpx2==2.13.1
--e .

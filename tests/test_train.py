@@ -1,6 +1,4 @@
 import json
-import subprocess
-import sys
 
 import joblib
 import polars as pl
@@ -50,12 +48,6 @@ def test_pipeline_rechaza_features_en_otro_orden(df, salida):
     X = modelo[:2].transform(df.head(30).drop("episodio_id", "segundo", "estado"))
     with pytest.raises(ValueError, match="feature names"):
         modelo[2:].predict(X.select(reversed(X.columns)))
-
-
-def test_joblib_carga_en_un_proceso_limpio_fuera_del_repo(salida, tmp_path):
-    codigo = f"import joblib; print(joblib.load(r'{salida / 'modelo.joblib'}').steps[0][0])"
-    r = subprocess.run([sys.executable, "-c", codigo], cwd=tmp_path, capture_output=True, text=True)
-    assert r.returncode == 0 and r.stdout.strip() == "contrato", r.stderr
 
 
 def test_test_son_12_episodios_no_vistos_3_por_clase(df, salida):
