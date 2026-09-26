@@ -44,7 +44,7 @@ referencia por nombre y los importa al cargarse.
 ## Uso
 
 ```bash
-python -m pytest              # 35 tests
+python -m pytest              # 42 tests
 python src/train.py           # reentrena y reescribe models/
 ```
 
@@ -104,8 +104,39 @@ curl -X POST http://127.0.0.1:8000/predecir -H "Content-Type: application/json" 
 ```
 
 ```json
-{"detail":[{"loc":["body"],"msg":"Value error, 1 lecturas fuera del rango fisico"}]}
+{"detail":[{"loc":["body"],"msg":"Value error, lecturas fuera del rango fisico en las posiciones [10]"}]}
 ```
+
+### Validación en la puerta
+
+`Ventana` y `Lectura` (`src/schema.py`) validan la petición antes de que el endpoint se ejecute.
+Si algo falla, la API responde 422 con la posición y el motivo, y el modelo no se llama; un test
+reemplaza el modelo por uno que lanza error si alguien lo usa, y los 10 casos de abajo pasan.
+
+| Petición | `msg` del 422 |
+|---|---|
+| lectura sin `ecc_errors` | `Field required` |
+| campo mal escrito (`tempC`) | `Extra inputs are not permitted` |
+| `"temp_c": "88.3"` (texto) | `Input should be a valid number` |
+| `"ecc_errors": 1.0` o `true` | `Input should be a valid integer` |
+| `"power_w": null` | `Input should be a valid number` |
+| 2, 10 o 31 lecturas | `List should have at least 30 items` / `at most 30 items` |
+| `temp_c` = 150 en la lectura 10 | `lecturas fuera del rango fisico en las posiciones [10]` |
+
+`Lectura` usa `strict=True`: sin él, Pydantic convertía `"88.3"`, `true` y `1.0` en números y el
+modelo predecía como si nada. `extra="forbid"` evita que un campo mal escrito se ignore.
+
+La ventana exige exactamente 30 lecturas, el tamaño con que se entrenó, y no un mínimo más
+bajo. Con ventanas más cortas de los 12 episodios de test el modelo sigue acertando, pero las
+features cambian de escala (`ecc_total` es una suma: con 10 lecturas vale un tercio) y la
+confianza cae:
+
+| Lecturas | Ventanas | Accuracy | Confianza mínima |
+|---|---|---|---|
+| 5 | 720 | 0.960 | 0.435 |
+| 10 | 360 | 1.000 | 0.678 |
+| 20 | 180 | 1.000 | 0.929 |
+| 30 | 120 | 1.000 | 0.976 |
 
 Los ejemplos `1_` a `4_` son la primera ventana de un episodio de test por clase (0, 13, 24 y
 38), que el modelo no vio al entrenar. `5_fuera_de_rango` es la de sobrecalentamiento con una
