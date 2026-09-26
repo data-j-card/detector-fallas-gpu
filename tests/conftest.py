@@ -1,13 +1,11 @@
-import sys
 from pathlib import Path
 
 import polars as pl
 import pytest
 
-RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ / "src"))
+from schema import leer_csv
 
-from schema import leer_csv  # noqa: E402
+RAIZ = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(scope="session")

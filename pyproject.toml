@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "detector-fallas-gpu"
+version = "0.1.0"
+description = "Clasificador de fallas de GPU a partir de ventanas de telemetria"
+requires-python = ">=3.11"
+dependencies = ["joblib", "pandera", "polars", "pydantic", "scikit-learn", "scipy"]
+
+# Los modulos de src/ se instalan con su nombre (schema, features, train):
+# el .joblib guarda referencias a schema.validar_ventana y features.features.
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["schema", "features", "train"]

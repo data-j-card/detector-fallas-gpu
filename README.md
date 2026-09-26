@@ -32,24 +32,25 @@ Requiere Python 3.11.
 ```bash
 python -m venv .venv
 .venv/Scripts/activate        # Windows; en Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt   # incluye `-e .`: instala schema, features y train
 ```
+
+La instalación hace importables los módulos de `src/` desde cualquier carpeta. El `.joblib`
+guarda los pasos ajustados, pero no el código de `validar_ventana` y `features`: los
+referencia por nombre y los importa al cargarse.
 
 ## Uso
 
 ```bash
-python -m pytest              # 26 tests
+python -m pytest              # 27 tests
 python src/train.py           # reentrena y reescribe models/
 ```
 
 Diagnosticar una ventana con el modelo serializado:
 
 ```python
-import sys
-
 import joblib
 
-sys.path.insert(0, "src")  # el pipeline serializado referencia src/features.py
 from schema import Ventana, leer_csv
 
 modelo = joblib.load("models/modelo.joblib")
