@@ -33,12 +33,39 @@ def test_predecir_diagnostica_episodio_de_test(cliente, estado):
     assert r.json()["estado_predicho"] == estado and 0.9 < r.json()["confianza"] <= 1
 
 
-def test_predecir_rechaza_lectura_fuera_de_rango_con_422(cliente):
-    r = cliente.post("/predecir", json=cargar("5_fuera_de_rango"))
-    assert r.status_code == 422 and "fuera del rango fisico" in r.json()["detail"][0]["msg"]
+class ModeloIntocable:
+    def predict_proba(self, X):
+        raise AssertionError("una peticion invalida llego al modelo")
 
 
-@pytest.mark.parametrize("romper", [lambda l: l[:29], lambda l: [{**x, "ecc_errors": "a"} for x in l]])
-def test_predecir_rechaza_ventana_incompleta_o_mal_tipada_con_422(cliente, romper):
-    lecturas = romper(cargar("1_normal")["lecturas"])
-    assert cliente.post("/predecir", json={"lecturas": lecturas}).status_code == 422
+def con(**cambios):
+    """La ventana normal con la lectura 3 modificada."""
+    lecturas = cargar("1_normal")["lecturas"]
+    lecturas[3] = {**lecturas[3], **cambios}
+    return lecturas
+
+
+def sin_ecc():
+    return [{k: v for k, v in l.items() if k != "ecc_errors"} for l in cargar("1_normal")["lecturas"]]
+
+
+INVALIDAS = {
+    "falta un campo": (sin_ecc, "Field required"),
+    "campo desconocido": (lambda: con(tempC=50.0), "Extra inputs are not permitted"),
+    "numero como texto": (lambda: con(temp_c="88.3"), "Input should be a valid number"),
+    "conteo decimal": (lambda: con(ecc_errors=1.0), "Input should be a valid integer"),
+    "conteo booleano": (lambda: con(ecc_errors=True), "Input should be a valid integer"),
+    "valor nulo": (lambda: con(power_w=None), "Input should be a valid number"),
+    "2 lecturas": (lambda: cargar("1_normal")["lecturas"][:2], "at least 30 items"),
+    "10 lecturas": (lambda: cargar("1_normal")["lecturas"][:10], "at least 30 items"),
+    "31 lecturas": (lambda: cargar("1_normal")["lecturas"] * 2, "at most 30 items"),
+    "fuera de rango": (lambda: cargar("5_fuera_de_rango")["lecturas"], "fuera del rango fisico en las posiciones [10]"),
+}
+
+
+@pytest.mark.parametrize("lecturas, mensaje", INVALIDAS.values(), ids=INVALIDAS.keys())
+def test_peticion_invalida_responde_422_claro_sin_tocar_el_modelo(cliente, monkeypatch, lecturas, mensaje):
+    monkeypatch.setattr(app.state, "modelo", ModeloIntocable())
+    r = cliente.post("/predecir", json={"lecturas": lecturas()})
+    assert r.status_code == 422
+    assert any(mensaje in e["msg"] for e in r.json()["detail"]), r.json()

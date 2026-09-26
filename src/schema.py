@@ -8,7 +8,7 @@ from copy import copy
 
 import pandera.polars as pa
 import polars as pl
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 ESTADOS = ["normal", "sobrecalentamiento", "degradacion_memoria", "falla_alimentacion"]
 TAMANO_VENTANA = 30
@@ -62,10 +62,11 @@ def validar_ventana(df: pl.DataFrame) -> pl.DataFrame:
     """
     if df.height != TAMANO_VENTANA:
         raise ValueError(f"la ventana tiene {df.height} lecturas; se esperan {TAMANO_VENTANA}")
-    valido = validar(df, Senales)
+    valido = validar(df.with_row_index("posicion"), Senales)
     if valido.height < df.height:
-        raise ValueError(f"{df.height - valido.height} lecturas fuera del rango fisico")
-    return valido
+        malas = sorted(set(range(df.height)) - set(valido["posicion"]))
+        raise ValueError(f"lecturas fuera del rango fisico en las posiciones {malas}")
+    return valido.drop("posicion")
 
 
 def leer_csv(ruta) -> pl.DataFrame:
@@ -73,6 +74,10 @@ def leer_csv(ruta) -> pl.DataFrame:
 
 
 class Lectura(BaseModel):
+    # strict: "88.3", true o 1.0 no se convierten en numeros; forbid: un campo mal escrito
+    # ("tempC") se rechaza en vez de ignorarse; sin NaN ni infinitos
+    model_config = ConfigDict(strict=True, extra="forbid", allow_inf_nan=False)
+
     temp_c: float
     power_w: float
     util_pct: float
