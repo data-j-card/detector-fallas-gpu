@@ -1,0 +1,5 @@
+pandera==0.33.1
+polars==1.44.2
+pydantic==2.13.5
+scikit-learn==1.9.1
+pytest==9.1.1
