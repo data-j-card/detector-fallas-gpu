@@ -1,3 +1,4 @@
+joblib==1.6.0
 pandera==0.33.1
 polars==1.44.2
 pydantic==2.13.5
