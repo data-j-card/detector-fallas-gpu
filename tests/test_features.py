@@ -1,0 +1,26 @@
+import polars as pl
+from polars.testing import assert_frame_equal
+
+from features import construir_dataset, features
+
+
+def test_ventanas_sin_ids_ni_nulos(df):
+    X, y, grupos = construir_dataset(df)
+    assert X.height == 477  # 3 ventanas con potencia negativa: episodios 36, 38 y 44
+    assert not {"episodio_id", "segundo", "estado"} & set(X.columns)
+    assert X.null_count().sum_horizontal().item() == 0 and not X.select(pl.all().is_nan().any()).row(0)[0]
+
+
+def test_train_y_api_calculan_lo_mismo(df):
+    X, _, _ = construir_dataset(df)
+    ventana = df.sort("episodio_id", "segundo").head(30).drop("episodio_id", "segundo", "estado")
+    assert_frame_equal(features(ventana), X.head(1))
+
+
+def test_fila_corrupta_descarta_solo_su_ventana(df, romper):
+    assert construir_dataset(romper(df, 5, 42, temp_c=150.0))[0].height == construir_dataset(df)[0].height - 1
+
+
+def test_segundo_duplicado_descarta_su_ventana(df):
+    dup = df.filter((pl.col("episodio_id") == 5) & (pl.col("segundo") == 42))
+    assert construir_dataset(pl.concat([df, dup]))[0].height == construir_dataset(df)[0].height - 1
