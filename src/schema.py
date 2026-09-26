@@ -8,6 +8,7 @@ from copy import copy
 
 import pandera.polars as pa
 import polars as pl
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 ESTADOS = ["normal", "sobrecalentamiento", "degradacion_memoria", "falla_alimentacion"]
 TAMANO_VENTANA = 30
@@ -54,3 +55,29 @@ def validar(df: pl.DataFrame, modelo=Telemetria) -> pl.DataFrame:
 def leer_csv(ruta) -> pl.DataFrame:
     return pl.read_csv(ruta, schema_overrides=TIPOS)
 
+
+class Lectura(BaseModel):
+    temp_c: float
+    power_w: float
+    util_pct: float
+    clock_mhz: float
+    ecc_errors: int
+
+
+class Ventana(BaseModel):
+    """Entrada de la API: una ventana de lecturas consecutivas, en orden."""
+
+    lecturas: list[Lectura] = Field(min_length=TAMANO_VENTANA, max_length=TAMANO_VENTANA)
+    _df: pl.DataFrame = PrivateAttr()
+
+    @model_validator(mode="after")
+    def _rango_fisico(self):
+        df = pl.DataFrame([l.model_dump() for l in self.lecturas])
+        self._df = validar(df, Senales)
+        if self._df.height < df.height:
+            raise ValueError("hay lecturas fuera del rango fisico")
+        return self
+
+    @property
+    def df(self) -> pl.DataFrame:
+        return self._df
