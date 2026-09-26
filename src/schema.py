@@ -4,6 +4,8 @@ Columna faltante o tipo incorrecto -> se rechaza el lote completo.
 Fila nula o fuera de rango fisico -> pandera la descarta y su ventana queda incompleta.
 """
 
+from copy import copy
+
 import pandera.polars as pa
 import polars as pl
 
@@ -38,6 +40,15 @@ class Telemetria(Senales):
     class Config:
         unique = ["episodio_id", "segundo"]
         drop_invalid_rows = True
+
+
+def validar(df: pl.DataFrame, modelo=Telemetria) -> pl.DataFrame:
+    # drop_invalid_rows tambien deja pasar columnas faltantes y tipos malos:
+    # la estructura se valida aparte, sin filas, con una copia que no descarta.
+    estructura = copy(modelo.to_schema())
+    estructura.drop_invalid_rows = False
+    estructura.validate(df.head(0), lazy=True)
+    return modelo.validate(df, lazy=True)
 
 
 def leer_csv(ruta) -> pl.DataFrame:

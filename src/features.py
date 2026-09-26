@@ -9,7 +9,7 @@ import logging
 
 import polars as pl
 
-from schema import TAMANO_VENTANA, Telemetria
+from schema import TAMANO_VENTANA, validar
 
 UMBRAL_TEMP_C = 83.0  # zona en que las GPU NVIDIA empiezan a bajar el reloj
 UMBRAL_UTIL_ALTA = 90.0
@@ -67,7 +67,7 @@ def construir_dataset(df: pl.DataFrame, tamano: int = TAMANO_VENTANA):
 
     X no lleva episodio_id, segundo ni estado; `grupos` es para StratifiedGroupKFold.
     """
-    valido = Telemetria.validate(df, lazy=True)
+    valido = validar(df)
     if valido.group_by("episodio_id").agg(pl.col("estado").n_unique()).get_column("estado").max() > 1:
         raise ValueError("hay episodios con mas de un estado")
 
