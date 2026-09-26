@@ -30,7 +30,15 @@ def test_pipeline_rechaza_features_en_otro_orden(df, salida):
         clasificador.predict(X.select(reversed(X.columns)))
 
 
-def test_reporte_de_metricas(salida):
+def test_test_son_12_episodios_no_vistos_3_por_clase(df, salida):
     r = json.loads((salida / "metricas.json").read_text(encoding="utf-8"))
-    assert r["ventanas"] == 480 and r["episodios"] == 48 and len(r["features"]) == 39
-    assert set(r["metricas"]) == {"accuracy_ventana", "f1_macro_ventana", "log_loss_ventana", "accuracy_episodio"}
+    train, test = set(r["episodios_entrenamiento"]), set(r["episodios_test"])
+    assert len(train) == 36 and len(test) == 12 and not train & test
+    clase = dict(df.select("episodio_id", "estado").unique().iter_rows())
+    assert pl.Series([clase[e] for e in test]).value_counts()["count"].to_list() == [3, 3, 3, 3]
+
+
+def test_test_reporta_ic95_por_episodio(salida):
+    t = json.loads((salida / "metricas.json").read_text(encoding="utf-8"))["test"]
+    bajo, alto = t["ic95_accuracy_episodio"]
+    assert bajo <= t["accuracy_episodio"] <= alto and t["episodios_acertados"].endswith("/12")
