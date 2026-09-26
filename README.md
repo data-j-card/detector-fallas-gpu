@@ -20,8 +20,10 @@ detector-fallas-gpu/
 ├── src/
 │   ├── schema.py                # contrato de datos (pandera) y entrada de la API (pydantic)
 │   ├── features.py              # ventaneo por episodio y cálculo de features
-│   └── train.py                 # separa train/test, valida, evalúa y serializa
-├── tests/                       # pytest: contrato, features y pipeline serializado
+│   ├── train.py                 # separa train/test, valida, evalúa y serializa
+│   └── api.py                   # FastAPI: /health y /predecir
+├── ejemplos/                    # ventanas de episodios de test para probar la API
+├── tests/                       # pytest: contrato, features, pipeline serializado y API
 └── requirements.txt
 ```
 
@@ -42,7 +44,7 @@ referencia por nombre y los importa al cargarse.
 ## Uso
 
 ```bash
-python -m pytest              # 27 tests
+python -m pytest              # 35 tests
 python src/train.py           # reentrena y reescribe models/
 ```
 
@@ -62,6 +64,60 @@ print(dict(zip(modelo.classes_.tolist(), modelo.predict_proba(ventana.df)[0].rou
 
 Cada lectura es un diccionario con `temp_c`, `power_w`, `util_pct`, `clock_mhz` y `ecc_errors`,
 en orden cronológico.
+
+## API
+
+```bash
+uvicorn api:app --host 127.0.0.1 --port 8000   # desde la raíz del repo
+```
+
+Swagger UI queda en <http://127.0.0.1:8000/docs>, con los ejemplos de `ejemplos/` en un desplegable.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET /health` | confirma que la API responde y lista las clases del modelo cargado |
+| `POST /predecir` | recibe 30 lecturas y devuelve el estado y la probabilidad de esa clase |
+
+La API no calcula features propias: `Ventana` aplica el contrato y `modelo.predict_proba`
+recorre el pipeline serializado (contrato -> `features` -> escalado -> regresión), el mismo
+que se entrenó. Una ventana incompleta, mal tipada o fuera del rango físico se rechaza con 422
+antes de llegar al modelo.
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+```json
+{"estado":"ok","clases":["degradacion_memoria","falla_alimentacion","normal","sobrecalentamiento"]}
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/predecir -H "Content-Type: application/json" -d @ejemplos/2_sobrecalentamiento.json
+```
+
+```json
+{"estado_predicho":"sobrecalentamiento","confianza":0.998}
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/predecir -H "Content-Type: application/json" -d @ejemplos/5_fuera_de_rango.json
+```
+
+```json
+{"detail":[{"loc":["body"],"msg":"Value error, 1 lecturas fuera del rango fisico"}]}
+```
+
+Los ejemplos `1_` a `4_` son la primera ventana de un episodio de test por clase (0, 13, 24 y
+38), que el modelo no vio al entrenar. `5_fuera_de_rango` es la de sobrecalentamiento con una
+lectura a 150 °C. `python ejemplos/generar.py` los regenera. En PowerShell, usa `curl.exe`.
+
+| Ejemplo | `estado_predicho` | `confianza` |
+|---|---|---|
+| `1_normal` | normal | 0.9965 |
+| `2_sobrecalentamiento` | sobrecalentamiento | 0.998 |
+| `3_degradacion_memoria` | degradacion_memoria | 0.9976 |
+| `4_falla_alimentacion` | falla_alimentacion | 0.999 |
+| `5_fuera_de_rango` | 422 | — |
 
 ## Datos
 
