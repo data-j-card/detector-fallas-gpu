@@ -34,7 +34,7 @@ Requiere Python 3.11.
 ```bash
 python -m venv .venv
 .venv/Scripts/activate        # Windows; en Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt   # incluye `-e .`: instala schema, features y train
+pip install -r requirements.txt   # incluye `-e .`: instala schema, features, train y api
 ```
 
 La instalación hace importables los módulos de `src/` desde cualquier carpeta. El `.joblib`
@@ -44,111 +44,38 @@ referencia por nombre y los importa al cargarse.
 ## Uso
 
 ```bash
-python -m pytest              # 42 tests
-python src/train.py           # reentrena y reescribe models/
+python -m pytest                                  # 42 tests
+python src/train.py                               # reentrena y reescribe models/
+uvicorn api:app --host 127.0.0.1 --port 8000      # levanta la API, desde la raíz del repo
 ```
-
-Diagnosticar una ventana con el modelo serializado:
-
-```python
-import joblib
-
-from schema import Ventana, leer_csv
-
-modelo = joblib.load("models/modelo.joblib")
-lecturas = leer_csv("data/telemetria_publica.csv").head(30).drop("episodio_id", "segundo", "estado").to_dicts()
-ventana = Ventana(lecturas=lecturas)  # aplica el contrato: una lectura fuera de rango lanza ValidationError
-print(modelo.predict(ventana.df))                                   # ['normal']
-print(dict(zip(modelo.classes_.tolist(), modelo.predict_proba(ventana.df)[0].round(3).tolist())))
-```
-
-Cada lectura es un diccionario con `temp_c`, `power_w`, `util_pct`, `clock_mhz` y `ecc_errors`,
-en orden cronológico.
 
 ## API
 
-```bash
-uvicorn api:app --host 127.0.0.1 --port 8000   # desde la raíz del repo
-```
+| Endpoint | Entrada | Salida |
+|---|---|---|
+| `GET /health` | — | `{"estado": "ok", "clases": [...]}` si el modelo cargó |
+| `POST /predecir` | `{"lecturas": [...]}` con 30 lecturas en orden | `{"estado_predicho": "...", "confianza": 0.998}` |
 
-Swagger UI queda en <http://127.0.0.1:8000/docs>, con los ejemplos de `ejemplos/` en un desplegable.
-
-| Endpoint | Qué hace |
-|---|---|
-| `GET /health` | confirma que la API responde y lista las clases del modelo cargado |
-| `POST /predecir` | recibe 30 lecturas y devuelve el estado y la probabilidad de esa clase |
-
-La API no calcula features propias: `Ventana` aplica el contrato y `modelo.predict_proba`
-recorre el pipeline serializado (contrato -> `features` -> escalado -> regresión), el mismo
-que se entrenó. Una ventana incompleta, mal tipada o fuera del rango físico se rechaza con 422
-antes de llegar al modelo.
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-```json
-{"estado":"ok","clases":["degradacion_memoria","falla_alimentacion","normal","sobrecalentamiento"]}
-```
+`confianza` es la probabilidad que el modelo asigna a la clase elegida. La documentación
+interactiva queda en <http://127.0.0.1:8000/docs>, con ventanas de episodios de test (`ejemplos/`)
+listas para ejecutar.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/predecir -H "Content-Type: application/json" -d @ejemplos/2_sobrecalentamiento.json
 ```
 
-```json
-{"estado_predicho":"sobrecalentamiento","confianza":0.998}
-```
+La API no calcula features propias: `modelo.predict_proba` recorre el pipeline serializado,
+que usa las mismas funciones `validar_ventana` y `features` del entrenamiento.
 
-```bash
-curl -X POST http://127.0.0.1:8000/predecir -H "Content-Type: application/json" -d @ejemplos/5_fuera_de_rango.json
-```
+Antes de llegar al modelo, `Lectura` y `Ventana` (`src/schema.py`) validan la petición. Cada
+lectura debe traer los cinco campos, sin campos extra y con su tipo exacto (`strict`: `"88.3"`,
+`true` o `1.0` no se convierten en números). La ventana debe tener exactamente 30 lecturas, el
+tamaño con que se entrenó: con menos, las features cambian de escala (`ecc_total` es una suma) y
+la confianza cae. Si algo falla, la respuesta es 422 con la posición y el motivo:
 
 ```json
 {"detail":[{"loc":["body"],"msg":"Value error, lecturas fuera del rango fisico en las posiciones [10]"}]}
 ```
-
-### Validación en la puerta
-
-`Ventana` y `Lectura` (`src/schema.py`) validan la petición antes de que el endpoint se ejecute.
-Si algo falla, la API responde 422 con la posición y el motivo, y el modelo no se llama; un test
-reemplaza el modelo por uno que lanza error si alguien lo usa, y los 10 casos de abajo pasan.
-
-| Petición | `msg` del 422 |
-|---|---|
-| lectura sin `ecc_errors` | `Field required` |
-| campo mal escrito (`tempC`) | `Extra inputs are not permitted` |
-| `"temp_c": "88.3"` (texto) | `Input should be a valid number` |
-| `"ecc_errors": 1.0` o `true` | `Input should be a valid integer` |
-| `"power_w": null` | `Input should be a valid number` |
-| 2, 10 o 31 lecturas | `List should have at least 30 items` / `at most 30 items` |
-| `temp_c` = 150 en la lectura 10 | `lecturas fuera del rango fisico en las posiciones [10]` |
-
-`Lectura` usa `strict=True`: sin él, Pydantic convertía `"88.3"`, `true` y `1.0` en números y el
-modelo predecía como si nada. `extra="forbid"` evita que un campo mal escrito se ignore.
-
-La ventana exige exactamente 30 lecturas, el tamaño con que se entrenó, y no un mínimo más
-bajo. Con ventanas más cortas de los 12 episodios de test el modelo sigue acertando, pero las
-features cambian de escala (`ecc_total` es una suma: con 10 lecturas vale un tercio) y la
-confianza cae:
-
-| Lecturas | Ventanas | Accuracy | Confianza mínima |
-|---|---|---|---|
-| 5 | 720 | 0.960 | 0.435 |
-| 10 | 360 | 1.000 | 0.678 |
-| 20 | 180 | 1.000 | 0.929 |
-| 30 | 120 | 1.000 | 0.976 |
-
-Los ejemplos `1_` a `4_` son la primera ventana de un episodio de test por clase (0, 13, 24 y
-38), que el modelo no vio al entrenar. `5_fuera_de_rango` es la de sobrecalentamiento con una
-lectura a 150 °C. `python ejemplos/generar.py` los regenera. En PowerShell, usa `curl.exe`.
-
-| Ejemplo | `estado_predicho` | `confianza` |
-|---|---|---|
-| `1_normal` | normal | 0.9965 |
-| `2_sobrecalentamiento` | sobrecalentamiento | 0.998 |
-| `3_degradacion_memoria` | degradacion_memoria | 0.9976 |
-| `4_falla_alimentacion` | falla_alimentacion | 0.999 |
-| `5_fuera_de_rango` | 422 | — |
 
 ## Datos
 
@@ -189,17 +116,97 @@ de entrada de la API, que usa la misma función.
 
 ## Features
 
-Se calculan por ventana de 30 s, cortada dentro de cada episodio, y solo con las filas de
-esa ventana. No hay estadísticos globales que filtren información entre train y test.
+Se calculan por ventana de 30 s, cortada dentro de cada episodio, y solo con las filas de esa
+ventana: no hay estadísticos globales que filtren información entre train y test. Antes de
+calcularlas, la potencia negativa se recorta a 0. Son 39.
 
-| Grupo | Features | Falla que delata |
+Las cifras de las tablas son la mediana por clase sobre las 480 ventanas del dataset:
+**N** normal, **S** sobrecalentamiento, **M** degradación de memoria, **A** falla de alimentación.
+
+### Estadísticos de cada señal (24)
+
+Para `temp_c`, `power_w`, `util_pct` y `clock_mhz` se calculan seis estadísticos:
+
+| Sufijo | Cálculo | Qué captura |
 |---|---|---|
-| nivel y dispersión de cada señal | media, std, min, max | sobrecalentamiento (temperatura y potencia altas, reloj bajo) |
-| dinámica | pendiente, cambio absoluto medio entre segundos | inestabilidad |
-| inestabilidad relativa | CV de potencia y de reloj | falla de alimentación |
-| memoria | total, fracción de segundos con error, máximo y pendiente de ECC | degradación de memoria |
-| umbrales físicos | fracción de tiempo ≥ 83 °C y ≥ 90 % de utilización | throttling térmico |
-| desacoples | temp/W, W/util, reloj/util, correlaciones temp–reloj, potencia–reloj, util–potencia, potencia–temp | señales que dejan de moverse juntas |
+| `_mean` | media de la ventana | nivel de operación |
+| `_std` | desviación estándar | cuánto oscila la señal |
+| `_min`, `_max` | extremos | caídas y picos que la media suaviza |
+| `_pendiente` | pendiente de la recta ajustada contra el segundo (cov(t, x) / var(t)) | si la señal sube o baja durante la ventana |
+| `_dif_abs` | media de \|x<sub>t</sub> − x<sub>t−1</sub>\| | saltos de un segundo al siguiente |
+
+| Feature | N | S | M | A |
+|---|---|---|---|---|
+| `temp_c_mean` | 54.9 | **88.0** | 60.0 | 50.2 |
+| `power_w_mean` | 199.8 | **290.3** | 208.5 | 140.5 |
+| `power_w_std` | 19.9 | 10.0 | 24.7 | **44.8** |
+| `power_w_min` | 160.2 | 270.6 | 157.1 | **48.6** |
+| `util_pct_mean` | 69.9 | **95.0** | 67.8 | 54.3 |
+| `util_pct_std` | 11.9 | 3.6 | 13.7 | **24.2** |
+| `clock_mhz_mean` | 2400 | **2100** | 2380 | **1798** |
+| `clock_mhz_std` | 29 | 79 | 38 | **203** |
+| `clock_mhz_dif_abs` | 33 | 90 | 45 | **228** |
+
+El sobrecalentamiento se ve en el nivel: la GPU trabaja al máximo, caliente y con el reloj
+recortado. La falla de alimentación se ve en la dispersión: potencia, utilización y reloj
+oscilan entre 2 y 7 veces más que en `normal`, y en una ventana típica la potencia llega a
+bajar a 49 W.
+
+Las cuatro `_pendiente` valen prácticamente 0 en todas las clases (entre −0.09 y 0.21 por
+segundo): la falla cubre el episodio entero y la señal no deriva dentro de la ventana. Se
+calculan igual, pero en este dataset no separan clases.
+
+### Inestabilidad relativa (2)
+
+| Feature | Cálculo | N | S | M | A |
+|---|---|---|---|---|---|
+| `power_w_cv` | std / media de la potencia | 0.10 | 0.04 | 0.12 | **0.31** |
+| `clock_mhz_cv` | std / media del reloj | 0.01 | 0.04 | 0.02 | **0.11** |
+
+El coeficiente de variación mide la oscilación en proporción al nivel, así que no depende de
+que la GPU consuma 150 o 300 W. Es la señal más directa de una alimentación inestable.
+
+### Memoria (4)
+
+| Feature | Cálculo | N | S | M | A |
+|---|---|---|---|---|---|
+| `ecc_total` | suma de errores ECC en la ventana | 0.5 | 3 | **149.5** | 6 |
+| `ecc_frac_con_error` | fracción de segundos con al menos un error | 0.02 | 0.10 | **1.00** | 0.17 |
+| `ecc_max` | máximo de errores en un segundo | 0.5 | 1 | **10** | 1 |
+| `ecc_pendiente` | pendiente de los errores contra el segundo | 0 | 0 | 0.01 | 0 |
+
+Las otras clases tienen errores ECC aislados; la degradación de memoria los tiene todos los
+segundos, unos 5 por segundo. `ecc_frac_con_error` separa las dos situaciones aunque el total
+fuera parecido: pocos errores concentrados no son lo mismo que errores constantes.
+
+### Umbrales físicos (2)
+
+| Feature | Cálculo | N | S | M | A |
+|---|---|---|---|---|---|
+| `temp_frac_sobre_umbral` | fracción de segundos con temperatura ≥ 83 °C | 0 | **0.97** | 0 | 0 |
+| `util_frac_alta` | fracción de segundos con utilización ≥ 90 % | 0.03 | **0.90** | 0.03 | 0.07 |
+
+83 °C es la zona en que las GPU NVIDIA empiezan a bajar el reloj para protegerse (throttling).
+Contar cuánto tiempo pasa la GPU sobre ese umbral es más directo que la media, que un solo pico
+no mueve.
+
+### Relaciones entre señales (7)
+
+| Feature | Cálculo | N | S | M | A |
+|---|---|---|---|---|---|
+| `clock_por_util` | reloj medio / utilización media | 34.4 | **22.1** | 35.1 | 33.0 |
+| `temp_por_watt` | temperatura media / potencia media | 0.27 | 0.30 | 0.29 | 0.36 |
+| `watt_por_util` | potencia media / utilización media | 2.88 | 3.06 | 3.07 | 2.61 |
+| `corr_temp_clock` | correlación temperatura–reloj | 0.00 | 0.00 | 0.04 | 0.01 |
+| `corr_power_clock` | correlación potencia–reloj | −0.01 | −0.02 | −0.04 | 0.00 |
+| `corr_util_power` | correlación utilización–potencia | 0.02 | −0.01 | 0.01 | 0.03 |
+| `corr_power_temp` | correlación potencia–temperatura | 0.00 | −0.02 | −0.01 | −0.03 |
+
+Buscan señales que dejan de moverse juntas. `clock_por_util` es la que funciona: con
+sobrecalentamiento la GPU entrega un tercio menos de reloj por cada punto de utilización, que
+es justo el throttling. Las cuatro correlaciones valen prácticamente 0 en todas las clases: en
+este dataset las señales varían de forma independiente segundo a segundo, así que no aportan.
+Un cociente o una correlación sin variación (divisor 0 o serie constante) se fija en 0.
 
 ## Separación, validación y test
 
