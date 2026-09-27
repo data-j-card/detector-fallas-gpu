@@ -5,7 +5,6 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from schema import Ventana
 from features import construir_dataset
 from train import entrenar, separar_test
 
@@ -20,8 +19,7 @@ def salida(tmp_path_factory):
 def test_pipeline_serializado_diagnostica_ventana_cruda(df, salida):
     modelo = joblib.load(salida / "modelo.joblib")
     for (estado,), g in df.sort("episodio_id", "segundo").group_by("estado", maintain_order=True):
-        v = Ventana(lecturas=g.head(30).drop("episodio_id", "segundo", "estado").to_dicts())
-        assert modelo.predict(v.df)[0] == estado
+        assert modelo.predict(g.head(30).drop("episodio_id", "segundo", "estado"))[0] == estado
 
 
 def test_pipeline_calcula_las_mismas_features_que_el_entrenamiento(df, salida):

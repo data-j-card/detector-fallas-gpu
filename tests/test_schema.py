@@ -4,7 +4,7 @@ import pytest
 from pandera.errors import SchemaErrors
 from pydantic import ValidationError
 
-from schema import Ventana, validar
+from schema import Peticion, validar
 
 CORRUPTAS = [{"power_w": -80.0}, {"temp_c": 150.0}, {"util_pct": 101.0}, {"ecc_errors": -1},
              {"clock_mhz": 2412.5}, {"estado": "otro"}, {"temp_c": None}]
@@ -27,13 +27,17 @@ def test_estructura_invalida_rechaza_el_lote(df, roto):
         validar(roto(df))
 
 
-def test_api_acepta_ventana_valida_y_rechaza_fuera_de_rango_o_incompleta(df):
-    lecturas = df.head(30).drop("episodio_id", "segundo", "estado").to_dicts()
-    assert Ventana(lecturas=lecturas).df.height == 30
-    with pytest.raises(ValidationError):
-        Ventana(lecturas=[{**lecturas[0], "temp_c": 150.0}] + lecturas[1:])
-    with pytest.raises(ValidationError):
-        Ventana(lecturas=lecturas[:29])
+def test_peticion_corta_ventanas_y_descarta_la_que_tiene_una_lectura_invalida(df):
+    lecturas = df.head(95).drop("episodio_id", "segundo", "estado").to_dicts()
+    lecturas[41] = {**lecturas[41], "temp_c": 150.0}
+    p = Peticion(lecturas=lecturas)
+    assert [v.height for v in p.ventanas] == [30, 30]  # 3 ventanas completas, la segunda descartada
+    assert "posicion 41: fuera del rango fisico" in p.aviso and "ultimas 5 lecturas" in p.aviso
+
+
+def test_peticion_rechaza_menos_de_30_lecturas(df):
+    with pytest.raises(ValidationError, match="llegaron 29 lecturas"):
+        Peticion(lecturas=df.head(29).drop("episodio_id", "segundo", "estado").to_dicts())
 
 
 def test_segundo_duplicado_descarta_ambas_copias(df):

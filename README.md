@@ -43,7 +43,8 @@ virtual, git, los datos y los tests.
 
 `GET /health` confirma que la API responde y que el modelo está cargado.
 
-`POST /predecir` recibe una ventana de 30 lecturas, una por segundo, en orden (aquí se muestran 2):
+`POST /predecir` recibe 30 o más lecturas consecutivas, una por segundo, en orden (aquí se
+muestran 2):
 
 ```json
 {
@@ -57,15 +58,24 @@ virtual, git, los datos y los tests.
 y devuelve el estado y la probabilidad que el modelo le da:
 
 ```json
-{"estado_predicho": "sobrecalentamiento", "confianza": 0.998}
+{"estado_predicho": "sobrecalentamiento", "confianza": 0.998, "aviso": null}
 ```
 
-Para probarlo desde <http://localhost:8000/docs>: abrir `POST /predecir`, *Try it out*, pegar la
-ventana en el cuerpo y *Execute*.
+Las lecturas se cortan en ventanas de 30 y, si hay varias, se promedian sus probabilidades. Una
+lectura que rompe el contrato (le falta un campo, viene vacía, no es un número o está fuera del
+rango físico) descarta su ventana, y `aviso` dice cuál y por qué:
 
-Si la ventana no tiene 30 lecturas, si a una lectura le falta un campo o trae un tipo
-incorrecto, o si un valor es físicamente imposible (por ejemplo, 150 °C), la API responde 422
-con el motivo y no llama al modelo.
+```json
+{"estado_predicho": "sobrecalentamiento", "confianza": 0.998,
+ "aviso": "1 de 2 ventanas descartadas: posicion 41: fuera del rango fisico"}
+```
+
+`aviso` también reporta las lecturas finales que no completan una ventana y los campos que no
+se usan. Si llegan menos de 30 lecturas o ninguna ventana cumple el contrato, la API responde
+422 con el motivo y no llama al modelo.
+
+Para probarlo desde <http://localhost:8000/docs>: abrir `POST /predecir`, *Try it out*, pegar
+las lecturas en el cuerpo y *Execute*.
 
 ## Features
 
