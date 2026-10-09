@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: detector-fallas-gpu
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      # el Dockerfile escucha en 8000 y Render asume 10000 por defecto
+      - key: PORT
+        value: "8000"
